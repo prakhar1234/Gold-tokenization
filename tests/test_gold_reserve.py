@@ -86,6 +86,47 @@ class TestReserveLedger:
         assert restored.total_reserved == 1000.0
 
 
+class TestReserveProofDepositorField:
+    def test_depositor_in_to_from_dict(self):
+        proof = ReserveProof(
+            custodian="Vault",
+            amount_grams=100.0,
+            depositor_address="0xDEP",
+        )
+        d = proof.to_dict()
+        assert d["depositor_address"] == "0xDEP"
+        restored = ReserveProof.from_dict(d)
+        assert restored.depositor_address == "0xDEP"
+
+    def test_depositor_default_empty(self):
+        proof = ReserveProof(custodian="V", amount_grams=50.0)
+        assert proof.depositor_address == ""
+
+
+class TestLedgerDepositorIndex:
+    def test_add_reserve_with_depositor(self):
+        ledger = ReserveLedger()
+        p = ReserveProof(custodian="V", amount_grams=100.0, purity=1.0, depositor_address="0xA")
+        ledger.add_reserve(p)
+        assert ledger.get_depositor_reserved("0xA") == 100.0
+
+    def test_remove_reserve_cleans_index(self):
+        ledger = ReserveLedger()
+        p = ReserveProof(custodian="V", amount_grams=100.0, purity=1.0, depositor_address="0xA")
+        ledger.add_reserve(p)
+        ledger.remove_reserve(p.proof_id)
+        assert ledger.get_depositor_reserved("0xA") == 0.0
+
+    def test_serialization_round_trip_with_depositor(self):
+        ledger = ReserveLedger()
+        ledger.add_reserve(ReserveProof(custodian="V", amount_grams=200.0, purity=1.0, depositor_address="0xX"))
+        ledger.record_depositor_mint("0xX", 50.0)
+        d = ledger.to_dict()
+        restored = ReserveLedger.from_dict(d)
+        assert restored.get_depositor_reserved("0xX") == 200.0
+        assert restored.get_depositor_minted("0xX") == 50.0
+
+
 class TestGoldTokenManager:
     def test_create_mint_transaction(self, token_manager, authority_keypair, alice_keypair):
         tx = token_manager.create_mint_transaction(

@@ -144,3 +144,46 @@ class TestNodeAPI:
         resp = client.post("/transactions", json=tx.to_dict())
         assert resp.status_code == 400
         assert "reserves" in resp.get_json()["error"].lower()
+
+    def test_add_reserve_with_depositor(self, client):
+        resp = client.post("/reserves", json={
+            "custodian": "Vault",
+            "amount_grams": 300.0,
+            "purity": 1.0,
+            "depositor_address": "0xDEP",
+        })
+        assert resp.status_code == 201
+        assert resp.get_json()["proof"]["depositor_address"] == "0xDEP"
+
+    def test_portfolio_endpoint(self, client):
+        client.post("/reserves", json={
+            "custodian": "V", "amount_grams": 100.0, "purity": 1.0,
+            "depositor_address": "0xPORT",
+        })
+        resp = client.get("/portfolio/0xPORT")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["reserved_grams"] == 100.0
+        assert data["balance"] == 0.0
+
+    def test_transactions_endpoint(self, client):
+        resp = client.get("/transactions/0xNONE")
+        assert resp.status_code == 200
+        assert resp.get_json()["transactions"] == []
+
+    def test_create_wallet(self, client):
+        resp = client.post("/wallets", json={"name": "testw"})
+        assert resp.status_code == 201
+        data = resp.get_json()
+        assert data["name"] == "testw"
+        assert data["address"].startswith("0x")
+        assert len(data["address"]) == 42
+        assert "private_key" in data
+        assert "public_key" in data
+
+    def test_list_wallets(self, client):
+        client.post("/wallets", json={"name": "w1"})
+        resp = client.get("/wallets")
+        assert resp.status_code == 200
+        wallets = resp.get_json()["wallets"]
+        assert any(w["name"] == "w1" for w in wallets)

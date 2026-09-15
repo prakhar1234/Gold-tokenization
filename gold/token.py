@@ -33,6 +33,7 @@ class GoldTokenManager:
         amount_grams: float,
         purity: float = 0.999,
         certificate_ref: str = "",
+        depositor_address: str = "",
     ) -> ReserveProof:
         """Register a new gold reserve proof."""
         proof = ReserveProof(
@@ -40,6 +41,7 @@ class GoldTokenManager:
             amount_grams=amount_grams,
             purity=purity,
             certificate_ref=certificate_ref,
+            depositor_address=depositor_address,
         )
         self.reserves.add_reserve(proof)
         return proof

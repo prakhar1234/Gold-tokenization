@@ -18,6 +18,7 @@ class ReserveProof:
     certificate_ref: str = ""  # external certificate reference
     timestamp: float = field(default_factory=time.time)
     verified: bool = False
+    depositor_address: str = ""  # wallet address of the depositor
 
     def __post_init__(self):
         self.amount_grams = round(self.amount_grams, 4)
@@ -31,6 +32,7 @@ class ReserveProof:
             "purity": self.purity,
             "certificate_ref": self.certificate_ref,
             "timestamp": self.timestamp,
+            "depositor_address": self.depositor_address,
         })[:16]
 
     def effective_grams(self) -> float:
@@ -46,6 +48,7 @@ class ReserveProof:
             "certificate_ref": self.certificate_ref,
             "timestamp": self.timestamp,
             "verified": self.verified,
+            "depositor_address": self.depositor_address,
         }
 
     @classmethod
@@ -58,6 +61,7 @@ class ReserveProof:
             certificate_ref=data.get("certificate_ref", ""),
             timestamp=data.get("timestamp", time.time()),
             verified=data.get("verified", False),
+            depositor_address=data.get("depositor_address", ""),
         )
 
 
@@ -71,6 +75,9 @@ class ReserveLedger:
         self.reserves: Dict[str, ReserveProof] = {}
         self.total_minted: float = 0.0
         self.total_burned: float = 0.0
+        # Per-depositor tracking
+        self._depositor_reserves: Dict[str, List[str]] = {}  # address → proof_ids
+        self._depositor_minted: Dict[str, float] = {}  # address → minted amount
 
     @property
     def total_reserved(self) -> float:
@@ -94,10 +101,19 @@ class ReserveLedger:
     def add_reserve(self, proof: ReserveProof) -> None:
         """Register a new gold reserve proof."""
         self.reserves[proof.proof_id] = proof
+        if proof.depositor_address:
+            self._depositor_reserves.setdefault(proof.depositor_address, []).append(proof.proof_id)
 
     def remove_reserve(self, proof_id: str) -> Optional[ReserveProof]:
         """Remove a reserve proof (e.g., gold withdrawn)."""
-        return self.reserves.pop(proof_id, None)
+        proof = self.reserves.pop(proof_id, None)
+        if proof and proof.depositor_address:
+            ids = self._depositor_reserves.get(proof.depositor_address, [])
+            if proof_id in ids:
+                ids.remove(proof_id)
+                if not ids:
+                    del self._depositor_reserves[proof.depositor_address]
+        return proof
 
     def can_mint(self, amount: float) -> bool:
         """Check if minting the given amount would violate the invariant.
@@ -127,6 +143,46 @@ class ReserveLedger:
         self.total_minted = 0.0
         self.total_burned = 0.0
 
+    # ── Per-depositor methods ────────────────────────────────────
+
+    def get_depositor_reserves(self, address: str) -> List[ReserveProof]:
+        """Return all reserve proofs belonging to a depositor."""
+        proof_ids = self._depositor_reserves.get(address, [])
+        return [self.reserves[pid] for pid in proof_ids if pid in self.reserves]
+
+    def get_depositor_reserved(self, address: str) -> float:
+        """Total effective gold grams reserved by a depositor."""
+        return round(
+            sum(r.effective_grams() for r in self.get_depositor_reserves(address)), 4
+        )
+
+    def get_depositor_minted(self, address: str) -> float:
+        """Total AUT minted against a depositor's reserves."""
+        return self._depositor_minted.get(address, 0.0)
+
+    def can_mint_for_depositor(self, address: str, amount: float) -> bool:
+        """Check if minting amount for a depositor would exceed their reserves."""
+        reserved = self.get_depositor_reserved(address)
+        already_minted = self.get_depositor_minted(address)
+        return (already_minted + amount) <= reserved
+
+    def record_depositor_mint(self, address: str, amount: float) -> None:
+        """Record that AUT was minted against a depositor's reserves."""
+        current = self._depositor_minted.get(address, 0.0)
+        self._depositor_minted[address] = round(current + amount, 4)
+
+    def get_depositor_portfolio(self, address: str) -> dict:
+        """Return a full portfolio summary for a depositor."""
+        reserved = self.get_depositor_reserved(address)
+        minted = self.get_depositor_minted(address)
+        return {
+            "address": address,
+            "reserved_grams": reserved,
+            "total_minted": minted,
+            "mint_capacity": round(max(0.0, reserved - minted), 4),
+            "reserves": [r.to_dict() for r in self.get_depositor_reserves(address)],
+        }
+
     def get_audit_summary(self) -> dict:
         return {
             "total_reserved_grams": self.total_reserved,
@@ -142,13 +198,19 @@ class ReserveLedger:
             "reserves": {k: v.to_dict() for k, v in self.reserves.items()},
             "total_minted": self.total_minted,
             "total_burned": self.total_burned,
+            "depositor_minted": dict(self._depositor_minted),
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "ReserveLedger":
         ledger = cls()
         for k, v in data.get("reserves", {}).items():
-            ledger.reserves[k] = ReserveProof.from_dict(v)
+            proof = ReserveProof.from_dict(v)
+            ledger.reserves[k] = proof
+            # Rebuild depositor index
+            if proof.depositor_address:
+                ledger._depositor_reserves.setdefault(proof.depositor_address, []).append(k)
         ledger.total_minted = data.get("total_minted", 0.0)
         ledger.total_burned = data.get("total_burned", 0.0)
+        ledger._depositor_minted = data.get("depositor_minted", {})
         return ledger

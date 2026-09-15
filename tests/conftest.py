@@ -17,6 +17,8 @@ from gold.reserve import ReserveLedger, ReserveProof
 from gold.token import GoldTokenManager
 from network.mempool import Mempool
 from network.node import create_node
+from trading.order_book import OrderBook
+from trading.matching_engine import MatchingEngine
 from wallet.wallet import Wallet
 
 
@@ -112,6 +114,18 @@ def app(config):
 def client(app):
     """Flask test client."""
     return app.test_client()
+
+
+@pytest.fixture
+def order_book():
+    """Fresh order book."""
+    return OrderBook(max_size=100)
+
+
+@pytest.fixture
+def matching_engine(order_book, blockchain, mempool):
+    """Matching engine wired to order book, blockchain, and mempool."""
+    return MatchingEngine(order_book, blockchain, mempool)
 
 
 @pytest.fixture

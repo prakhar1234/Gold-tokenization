@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
         amount_grams: parseFloat(body.amount_grams),
         purity: parseFloat(body.purity || '0.999'),
         certificate_ref: body.certificate_ref || '',
+        depositor_address: body.depositor_address || '',
       }),
     });
 

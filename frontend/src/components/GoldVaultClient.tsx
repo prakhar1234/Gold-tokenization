@@ -54,6 +54,7 @@ interface OnboardForm {
   amount_grams: string;
   purity: string;
   certificate_ref: string;
+  depositor_address: string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -83,7 +84,7 @@ export function GoldVaultClient() {
   // Onboard form
   const [showOnboard, setShowOnboard] = useState(false);
   const [form, setForm] = useState<OnboardForm>({
-    custodian: '', amount_grams: '', purity: '0.999', certificate_ref: '',
+    custodian: '', amount_grams: '', purity: '0.999', certificate_ref: '', depositor_address: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -160,6 +161,7 @@ export function GoldVaultClient() {
           amount_grams: amount,
           purity,
           certificate_ref: form.certificate_ref.trim(),
+          depositor_address: form.depositor_address.trim(),
         }),
       });
 
@@ -169,7 +171,7 @@ export function GoldVaultClient() {
       }
 
       showToast(`${formatNumber(amount)} grams of gold onboarded successfully`, 'success');
-      setForm({ custodian: '', amount_grams: '', purity: '0.999', certificate_ref: '' });
+      setForm({ custodian: '', amount_grams: '', purity: '0.999', certificate_ref: '', depositor_address: '' });
       setShowOnboard(false);
       fetchData();
     } catch (err) {
@@ -501,6 +503,18 @@ export function GoldVaultClient() {
                   value={form.certificate_ref}
                   onChange={e => setForm(f => ({ ...f, certificate_ref: e.target.value }))}
                   placeholder="e.g. GLD-2026-001"
+                  disabled={submitting}
+                  className="w-full px-3 py-2.5 bg-[#111823] border border-[#232c3c] rounded-lg text-[13px] text-[#dbe4f0] placeholder-[#3d4654] focus:outline-none focus:border-[#45c4b0] disabled:opacity-50 transition-colors"
+                  style={MONO}
+                />
+              </FormField>
+
+              <FormField label="Depositor Address" required={false}>
+                <input
+                  type="text"
+                  value={form.depositor_address}
+                  onChange={e => setForm(f => ({ ...f, depositor_address: e.target.value }))}
+                  placeholder="e.g. 0x1a2b3c..."
                   disabled={submitting}
                   className="w-full px-3 py-2.5 bg-[#111823] border border-[#232c3c] rounded-lg text-[13px] text-[#dbe4f0] placeholder-[#3d4654] focus:outline-none focus:border-[#45c4b0] disabled:opacity-50 transition-colors"
                   style={MONO}
