@@ -1,9 +1,12 @@
 """Chain synchronization protocol — longest valid chain wins."""
 
+import logging
 from typing import List, Optional, Tuple
 
 from blockchain.block import Block, Blockchain
 from network.peer import PeerManager
+
+logger = logging.getLogger(__name__)
 
 
 class ChainSynchronizer:
@@ -22,6 +25,7 @@ class ChainSynchronizer:
         """
         peers = self.peer_manager.peers
         if not peers:
+            logger.info("Sync: no peers to sync with")
             return False, "No peers to sync with"
 
         # Find the peer with the longest chain
@@ -40,17 +44,20 @@ class ChainSynchronizer:
         # Download chain from the best peer
         chain_data = self.peer_manager.get_chain(best_peer)
         if chain_data is None:
+            logger.warning("Sync: failed to download chain from %s", best_peer)
             return False, f"Failed to download chain from {best_peer}"
 
         # Parse blocks
         try:
             new_chain = [Block.from_dict(b) for b in chain_data]
         except (KeyError, ValueError) as e:
+            logger.warning("Sync: invalid chain data from %s: %s", best_peer, e)
             return False, f"Invalid chain data from {best_peer}: {e}"
 
         # Validate and replace
         replaced = self.blockchain.replace_chain(new_chain)
         if replaced:
+            logger.info("Chain replaced from %s (length %d)", best_peer, best_length)
             # Rebuild reserve ledger counters from the new chain
             if self.token_manager:
                 self.token_manager.rebuild_from_chain()
@@ -90,4 +97,5 @@ class ChainSynchronizer:
                 return False, f"State error: {apply_error}"
 
         self.blockchain.chain.append(block)
+        logger.info("Block %d accepted from peer", block.header.index)
         return True, f"Block {block.header.index} accepted"

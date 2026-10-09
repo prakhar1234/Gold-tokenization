@@ -1,5 +1,6 @@
 """Gold token manager coordinating blockchain and reserve operations."""
 
+import logging
 import time
 from typing import Optional
 
@@ -8,6 +9,8 @@ from blockchain.transaction import Transaction, TransactionType
 from config import DEFAULT_CONFIG, NetworkConfig
 from crypto.keys import public_key_to_address
 from gold.reserve import ReserveLedger, ReserveProof
+
+logger = logging.getLogger(__name__)
 
 
 class GoldTokenManager:
@@ -44,6 +47,7 @@ class GoldTokenManager:
             depositor_address=depositor_address,
         )
         self.reserves.add_reserve(proof)
+        logger.info("Reserve added: %.4f grams from %s (purity=%.3f)", amount_grams, custodian, purity)
         return proof
 
     def create_mint_transaction(
@@ -134,8 +138,10 @@ class GoldTokenManager:
         for tx in block.transactions:
             if tx.tx_type == TransactionType.MINT:
                 self.reserves.record_mint(tx.amount)
+                logger.info("Mint recorded: %.4f AUT to %s", tx.amount, tx.recipient[:16])
             elif tx.tx_type == TransactionType.BURN:
                 self.reserves.record_burn(tx.amount)
+                logger.info("Burn recorded: %.4f AUT from %s", tx.amount, tx.sender[:16])
 
     def rebuild_from_chain(self) -> None:
         """Rebuild reserve ledger mint/burn counters from the full chain.
@@ -143,6 +149,7 @@ class GoldTokenManager:
         Called after chain sync to reconcile the reserve ledger with
         the actual on-chain history.
         """
+        logger.info("Rebuilding reserve ledger from chain (%d blocks)", len(self.blockchain.chain) - 1)
         self.reserves.reset_counters()
         for block in self.blockchain.chain[1:]:  # skip genesis
             for tx in block.transactions:

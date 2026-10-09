@@ -1,5 +1,6 @@
 """Flask REST API for a blockchain node."""
 
+import logging
 import os
 
 from flask import Flask, jsonify, request
@@ -10,6 +11,7 @@ from blockchain.transaction import Transaction, TransactionType
 from config import DEFAULT_CONFIG, NetworkConfig
 from gold.reserve import ReserveLedger, ReserveProof
 from gold.token import GoldTokenManager
+from logging_config import setup_logging
 from network.mempool import Mempool
 from network.peer import PeerManager
 from network.sync import ChainSynchronizer
@@ -17,6 +19,8 @@ from trading.matching_engine import MatchingEngine
 from trading.order import Order, OrderSide
 from trading.order_book import OrderBook
 from wallet.wallet import Wallet
+
+logger = logging.getLogger(__name__)
 
 
 def create_node(
@@ -26,10 +30,13 @@ def create_node(
 ) -> Flask:
     """Create and configure a Flask blockchain node."""
 
+    setup_logging()
+
     app = Flask(__name__)
     CORS(app)
 
     node_url = f"http://{host}:{port}"
+    logger.info("Initializing node at %s (network_id=%s)", node_url, config.network_id)
 
     # Core components
     blockchain = Blockchain(config=config)
@@ -123,6 +130,7 @@ def create_node(
         # Broadcast to peers
         peer_manager.broadcast_transaction(data)
 
+        logger.info("Transaction submitted: %s type=%s amount=%.4f", tx.tx_hash[:16], tx.tx_type.value, tx.amount)
         return jsonify({"tx_hash": tx.tx_hash, "status": "pending"}), 201
 
     @app.route("/mempool", methods=["GET"])
@@ -173,6 +181,8 @@ def create_node(
         mined_hashes = [tx.tx_hash for tx in transactions]
         mempool.remove_transactions(mined_hashes)
 
+        logger.info("Block %d mined by %s with %d txs", block.header.index, validator, len(transactions))
+
         # Broadcast new block to peers
         peer_manager.broadcast_block(block.to_dict())
 
@@ -207,6 +217,7 @@ def create_node(
                     elif tx.tx_type == TxType.BURN:
                         reserve_ledger.record_burn(tx.amount)
             except Exception:
+                logger.error("Failed to process received block post-accept", exc_info=True)
                 pass
             return jsonify({"accepted": True, "message": message})
         else:
@@ -335,6 +346,7 @@ def create_node(
                         "address": wdata.get("address", ""),
                     })
                 except Exception:
+                    logger.warning("Skipping malformed wallet file: %s", filename, exc_info=True)
                     continue
 
         return jsonify({"wallets": wallets})

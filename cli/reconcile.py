@@ -17,6 +17,7 @@ Usage:
 
 import argparse
 import json
+import logging
 import sys
 import os
 import time
@@ -27,6 +28,8 @@ from typing import Dict, List, Optional, Tuple
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 from blockchain.block import Block, BlockHeader
 from blockchain.merkle import compute_merkle_root
@@ -116,7 +119,8 @@ def fetch_json(url: str, timeout: int = 15) -> Optional[dict]:
         resp = requests.get(url, timeout=timeout)
         resp.raise_for_status()
         return resp.json()
-    except requests.RequestException:
+    except requests.RequestException as e:
+        logger.warning("fetch_json failed for %s: %s", url, e)
         return None
 
 

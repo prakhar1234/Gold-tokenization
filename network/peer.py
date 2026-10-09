@@ -1,9 +1,12 @@
 """Peer discovery, registration, and broadcast communication."""
 
+import logging
 import threading
 from typing import Dict, List, Optional, Set
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 
 class PeerManager:
@@ -36,6 +39,7 @@ class PeerManager:
             if peer_url in self._peers:
                 return False
             self._peers.add(peer_url)
+            logger.info("Peer registered: %s", peer_url)
             return True
 
     def remove_peer(self, peer_url: str) -> None:
@@ -59,7 +63,8 @@ class PeerManager:
                     timeout=5,
                 )
                 results[peer] = resp.status_code == 201
-            except requests.RequestException:
+            except requests.RequestException as e:
+                logger.warning("Failed to broadcast tx to %s: %s", peer, e)
                 results[peer] = False
 
         return results
@@ -81,7 +86,8 @@ class PeerManager:
                     timeout=5,
                 )
                 results[peer] = resp.status_code == 200
-            except requests.RequestException:
+            except requests.RequestException as e:
+                logger.warning("Failed to broadcast block to %s: %s", peer, e)
                 results[peer] = False
 
         return results
@@ -102,7 +108,8 @@ class PeerManager:
                 self.register_peer(peer_url)
                 return True
             return False
-        except requests.RequestException:
+        except requests.RequestException as e:
+            logger.warning("Failed to register with peer %s: %s", peer_url, e)
             return False
 
     def health_check(self, peer_url: str) -> bool:
@@ -110,7 +117,8 @@ class PeerManager:
         try:
             resp = requests.get(f"{peer_url}/health", timeout=3)
             return resp.status_code == 200
-        except requests.RequestException:
+        except requests.RequestException as e:
+            logger.debug("Health check failed for %s: %s", peer_url, e)
             return False
 
     def get_chain_length(self, peer_url: str) -> Optional[int]:
@@ -120,7 +128,8 @@ class PeerManager:
             if resp.status_code == 200:
                 return resp.json().get("length")
             return None
-        except requests.RequestException:
+        except requests.RequestException as e:
+            logger.warning("Failed to get chain length from %s: %s", peer_url, e)
             return None
 
     def get_chain(self, peer_url: str) -> Optional[list]:
@@ -130,7 +139,8 @@ class PeerManager:
             if resp.status_code == 200:
                 return resp.json().get("chain")
             return None
-        except requests.RequestException:
+        except requests.RequestException as e:
+            logger.warning("Failed to download chain from %s: %s", peer_url, e)
             return None
 
     def prune_dead_peers(self) -> List[str]:
@@ -141,6 +151,8 @@ class PeerManager:
             if not self.health_check(peer):
                 self.remove_peer(peer)
                 removed.append(peer)
+        if removed:
+            logger.info("Pruned %d dead peer(s): %s", len(removed), removed)
         return removed
 
     def to_list(self) -> List[str]:

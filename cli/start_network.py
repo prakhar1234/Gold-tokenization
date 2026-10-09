@@ -1,6 +1,7 @@
 """Spin up N local blockchain nodes and register them as peers."""
 
 import argparse
+import logging
 import sys
 import threading
 import time
@@ -11,7 +12,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import requests
 from config import NetworkConfig
+from logging_config import setup_logging
 from network.node import create_node
+
+logger = logging.getLogger(__name__)
 
 
 def start_node(host: str, port: int, config: NetworkConfig) -> None:
@@ -46,10 +50,13 @@ def register_peers(node_urls: list) -> None:
                         timeout=5,
                     )
                 except requests.RequestException:
+                    logger.warning("Failed to register %s with %s", peer_url, url)
                     print(f"  Warning: Failed to register {peer_url} with {url}")
 
 
 def main():
+    setup_logging()
+
     parser = argparse.ArgumentParser(description="Start a local blockchain network")
     parser.add_argument("--nodes", type=int, default=3, help="Number of nodes")
     parser.add_argument("--base-port", type=int, default=5100, help="Base port number")
@@ -87,6 +94,7 @@ def main():
     print("Waiting for nodes to start...")
     for url in node_urls:
         if not wait_for_node(url):
+            logger.error("Node %s failed to start", url)
             print(f"  ERROR: Node {url} failed to start")
             sys.exit(1)
         print(f"  {url} ready")

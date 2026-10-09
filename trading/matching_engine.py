@@ -1,5 +1,6 @@
 """Matching engine for limit orders with TRANSFER settlement."""
 
+import logging
 import threading
 import time
 from typing import Dict, List, Optional
@@ -10,6 +11,8 @@ from network.mempool import Mempool
 from trading.order import Order, OrderSide, OrderStatus
 from trading.order_book import OrderBook
 from trading.trade import Trade
+
+logger = logging.getLogger(__name__)
 
 
 class MatchingEngine:
@@ -135,10 +138,13 @@ class MatchingEngine:
         # Verify seller has enough balance
         seller_balance = self.blockchain.state.get_balance(sell_order.address)
         if seller_balance < fill_amount:
+            logger.warning("Settlement failed: insufficient balance for seller %s (%.4f < %.4f)",
+                           sell_order.address[:16], seller_balance, fill_amount)
             return None
 
         # Verify seller has private key for signing
         if not sell_order._private_key:
+            logger.warning("Settlement failed: no private key for seller %s", sell_order.address[:16])
             return None
 
         # Use pending nonce tracker to avoid collisions for multiple fills
@@ -157,6 +163,7 @@ class MatchingEngine:
         # Submit to mempool
         pool_error = self.mempool.add_transaction(tx)
         if pool_error:
+            logger.warning("Settlement failed: mempool rejected tx: %s", pool_error)
             return None
 
         # Track nonce for future settlements from same seller
@@ -192,6 +199,8 @@ class MatchingEngine:
             self._last_price = exec_price
             self._volume_24h += fill_amount
 
+        logger.info("Trade executed: %.4f AUT @ %.4f (buyer=%s seller=%s)",
+                     fill_amount, exec_price, buy_order.address[:12], sell_order.address[:12])
         return trade
 
     def get_trades(self, limit: int = 50, address: Optional[str] = None) -> List[dict]:

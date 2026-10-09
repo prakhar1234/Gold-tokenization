@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import logging
 import os
 import sys
 
@@ -10,6 +11,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import requests
 from blockchain.transaction import Transaction, TransactionType
 from wallet.wallet import Wallet
+
+logger = logging.getLogger(__name__)
 
 
 def load_wallet(filepath: str, password: str = None) -> Wallet:
@@ -24,6 +27,7 @@ def load_wallet(filepath: str, password: str = None) -> Wallet:
             password = getpass.getpass("Wallet password: ")
         wallet = Wallet.load_encrypted(filepath, password)
         if wallet is None:
+            logger.error("Failed to decrypt wallet: %s", filepath)
             print("ERROR: Failed to decrypt wallet")
             sys.exit(1)
         return wallet

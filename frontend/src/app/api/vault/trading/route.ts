@@ -78,11 +78,16 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const required = ['side', 'address', 'price', 'amount', 'public_key', 'signature'];
+    const required = ['side', 'address', 'price', 'amount', 'public_key'];
     for (const field of required) {
       if (!body[field]) {
         return NextResponse.json({ error: `Missing field: ${field}` }, { status: 400 });
       }
+    }
+
+    // PoC: either a pre-signed signature or a private_key for server-side signing is required
+    if (!body.signature && !body.private_key) {
+      return NextResponse.json({ error: 'Missing field: signature or private_key' }, { status: 400 });
     }
 
     const response = await fetch(`${BLOCKCHAIN_URL}/orders`, {

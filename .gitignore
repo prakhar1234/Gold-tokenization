@@ -17,6 +17,9 @@ frontend/out/
 data/
 wallets/
 
+# Logs
+logs/
+
 # Environment
 .env
 .env.local

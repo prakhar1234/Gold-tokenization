@@ -1,10 +1,13 @@
 """Thread-safe transaction pool (mempool) management."""
 
+import logging
 import threading
 import time
 from typing import Dict, List, Optional
 
 from blockchain.transaction import Transaction
+
+logger = logging.getLogger(__name__)
 
 
 class Mempool:
@@ -35,9 +38,11 @@ class Mempool:
                 return "Transaction already in mempool"
 
             if len(self._transactions) >= self.max_size:
+                logger.warning("Mempool full (%d), rejecting tx %s", self.max_size, tx.tx_hash[:16])
                 return "Mempool is full"
 
             self._transactions[tx.tx_hash] = tx
+            logger.debug("Mempool add: %s (size=%d)", tx.tx_hash[:16], len(self._transactions))
             return None
 
     def remove_transaction(self, tx_hash: str) -> Optional[Transaction]:
@@ -85,6 +90,8 @@ class Mempool:
             for h in expired:
                 del self._transactions[h]
                 removed += 1
+        if removed:
+            logger.debug("Mempool: cleared %d expired transactions", removed)
         return removed
 
     def clear(self) -> None:

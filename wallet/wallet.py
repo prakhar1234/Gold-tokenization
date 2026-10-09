@@ -1,6 +1,7 @@
 """Wallet creation, encrypted key storage, and transaction signing."""
 
 import json
+import logging
 import os
 from dataclasses import dataclass
 from typing import Optional
@@ -15,6 +16,8 @@ from crypto.keys import (
     public_key_to_address,
     sign_message,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _derive_key(password: str, salt: bytes) -> bytes:
@@ -81,6 +84,7 @@ class Wallet:
                 "ciphertext": ciphertext.hex(),
                 "address": self.address,  # stored unencrypted for identification
             }, f, indent=2)
+        logger.info("Wallet saved to %s (address=%s)", filepath, self.address[:16])
 
     @classmethod
     def load_encrypted(cls, filepath: str, password: str) -> Optional["Wallet"]:
@@ -102,6 +106,7 @@ class Wallet:
         try:
             plaintext = aesgcm.decrypt(nonce, ciphertext, None)
         except Exception:
+            logger.error("Wallet decryption failed for %s", filepath)
             return None
 
         wallet_data = json.loads(plaintext.decode("utf-8"))

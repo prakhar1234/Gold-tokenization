@@ -1,6 +1,7 @@
 """Block, BlockHeader, and Blockchain classes."""
 
 import json
+import logging
 import os
 import time
 from dataclasses import dataclass, field
@@ -12,6 +13,8 @@ from blockchain.state import AccountState
 from blockchain.transaction import Transaction
 from config import DEFAULT_CONFIG, NetworkConfig
 from crypto.hashing import canonical_json, hash_string
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -134,9 +137,11 @@ class Blockchain:
         temp_state = self.state.copy()
         for tx in transactions:
             if not tx.verify():
+                logger.warning("Block creation failed: invalid tx signature %s", tx.tx_hash[:16])
                 return None
             error = temp_state.apply_transaction(tx)
             if error:
+                logger.warning("Block creation failed: %s (tx %s)", error, tx.tx_hash[:16])
                 return None
 
         tx_hashes = [tx.tx_hash for tx in transactions]
@@ -228,8 +233,10 @@ class Blockchain:
 
         error = self.validate_chain(new_chain)
         if error:
+            logger.warning("Chain replacement rejected: %s", error)
             return False
 
+        logger.info("Chain replaced: %d -> %d blocks", len(self.chain), len(new_chain))
         self.chain = new_chain
         # Rebuild state from new chain
         self.state = AccountState()
@@ -248,10 +255,12 @@ class Blockchain:
         }
         with open(filepath, "w") as f:
             json.dump(data, f, indent=2)
+        logger.info("Chain saved to %s (%d blocks)", filepath, len(self.chain))
 
     def load_from_file(self, filepath: str) -> bool:
         """Load chain from a JSON file. Returns True if successful."""
         if not os.path.exists(filepath):
+            logger.info("Chain file not found: %s", filepath)
             return False
 
         with open(filepath, "r") as f:
@@ -260,6 +269,7 @@ class Blockchain:
         chain = [Block.from_dict(b) for b in data["chain"]]
         error = self.validate_chain(chain)
         if error:
+            logger.warning("Chain file %s failed validation: %s", filepath, error)
             return False
 
         self.chain = chain

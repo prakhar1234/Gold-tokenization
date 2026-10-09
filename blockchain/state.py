@@ -1,9 +1,12 @@
 """Account state management for balances and nonces."""
 
+import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from blockchain.transaction import Transaction, TransactionType
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -65,6 +68,7 @@ class AccountState:
         """
         error = self.validate_transaction(tx)
         if error:
+            logger.debug("State validation failed for tx %s: %s", tx.tx_hash[:16], error)
             return error
 
         if tx.tx_type == TransactionType.MINT:
